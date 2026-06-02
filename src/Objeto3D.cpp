@@ -1,6 +1,6 @@
 /* Objeto 3D - Atividade Acadêmica Computação Gráfica - Módulo 5
  * Júlia Oliveira
- * Câmera em primeira pessoa com classe Camara.
+ * Câmera em primeira pessoa com classe Camera.
  * Inclui: View Matrix (lookAt), Projection Matrix (perspective),
  *         movimento WASD com deltaTime, mouse look (yaw/pitch), zoom com scroll.
  *
@@ -36,9 +36,9 @@ using namespace std;
 #include <glm/gtc/type_ptr.hpp>
 
 // ---------------------------------------------------------------------------
-// Classe Camara — encapsula posição, orientação, movimento e rotação
+// Classe Camera — encapsula posição, orientação, movimento e rotação
 // ---------------------------------------------------------------------------
-class Camara {
+class Camera {
 public:
     glm::vec3 posicao;
     glm::vec3 frente;
@@ -54,7 +54,7 @@ public:
     bool primeiraMouse;
     float ultimoX, ultimoY;
 
-    Camara(float larguraTela, float alturaTela,
+    Camera(float larguraTela, float alturaTela,
            glm::vec3 posInicial = glm::vec3(0.0f, 0.0f, 3.0f))
         : posicao(posInicial),
           frente(glm::vec3(0.0f, 0.0f, -1.0f)),
@@ -239,7 +239,7 @@ const GLchar* fonteFragmento =
 
 vector<Objeto> objetos;
 Luz luzes[3];
-Camara* camara = nullptr;
+Camera* camara = nullptr;
 
 int modoAtivo = 0;
 
@@ -291,7 +291,7 @@ int main()
     glfwGetFramebufferSize(janela, &larg, &alt);
     glViewport(0, 0, larg, alt);
 
-    camara = new Camara((float)LARGURA, (float)ALTURA);
+    camara = new Camera((float)LARGURA, (float)ALTURA);
 
     GLuint programaShader = inicializarShader();
     glUseProgram(programaShader);
