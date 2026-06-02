@@ -1,39 +1,49 @@
-# M2 Vivencial — Objeto 3D
+# M5 — Câmera em Primeira Pessoa
 **Júlia Oliveira | Computação Gráfica**
 
 ---
 
-Cena interativa com três objetos 3D carregados a partir de arquivo `.obj`. O usuário pode selecionar individualmente cada objeto e aplicar transformações via teclado.
+Cena interativa com três objetos 3D texturizados, iluminação Phong com técnica de 3 luzes pontuais e câmera em primeira pessoa controlada por teclado e mouse.
 
 ---
 
 ## Compilação
 
-Requisitos: **CMake 3.10+** e compilador **C++17**.
+Requisitos: **CMake 3.10+** e compilador **C++17** (MSVC recomendado).
 
-```bash
-mkdir build
+```powershell
 cd build
 cmake ..
-cmake --build .
+cmake --build . --config Debug
+cd Debug
 .\Objeto3D.exe
 ```
 
-> GLFW e GLM são baixados automaticamente pelo CMake na primeira compilação.
+> GLFW, GLM e stb_image são obtidos automaticamente pelo CMake na primeira compilação.
+
+> **Textura desatualizada?** Copie manualmente para a pasta do executável:
+> ```powershell
+> cp ..\assets\texture.png assets\texture.png
+> ```
 
 ---
 
 ## Como usar
 
-O título da janela sempre mostra qual objeto está selecionado e qual modo está ativo.
+O título da janela mostra o objeto selecionado, o modo ativo e o estado das luzes.
 
-**Seleção**
-- `TAB` — passa para o próximo objeto (0 → 1 → 2 → 0)
+### Câmera
+| Tecla / Input | Ação |
+|---|---|
+| `W` / `S` / `A` / `D` | Move câmera frente / trás / esquerda / direita |
+| Mouse | Orienta câmera (yaw/pitch) |
+| Scroll | Zoom (FOV entre 1° e 45°) |
 
-**Modos de transformação**
-- `R` — Girar
-- `T` — Transladar  
-- `S` — Escalar
+### Seleção e transformações
+- `TAB` — alterna objeto selecionado (0 → 1 → 2 → 0)
+- `R` — modo Girar
+- `T` — modo Transladar
+- `P` — modo Escalar (`S` reservado para câmera)
 
 **Ações com as setas (conforme o modo ativo)**
 
@@ -43,8 +53,15 @@ O título da janela sempre mostra qual objeto está selecionado e qual modo est�
 | Transladar | Eixo X | Eixo Y |
 | Escalar | — | Aumentar / Diminuir |
 
-No modo **Girar**, as teclas `X` `Y` `Z` rotacionam diretamente no eixo correspondente.  
+No modo **Girar**, as teclas `X` `Y` `Z` rotacionam no eixo correspondente.  
 No modo **Escalar**, `+` e `-` também funcionam.
+
+### Luzes
+| Tecla | Ação |
+|---|---|
+| `1` | Liga/desliga luz principal (key) |
+| `2` | Liga/desliga luz de preenchimento (fill) |
+| `3` | Liga/desliga luz de fundo (back) |
 
 `ESC` fecha a aplicação.
 
@@ -58,3 +75,4 @@ No modo **Escalar**, `+` e `-` também funcionam.
 | Janela e input | GLFW 3.4 |
 | Matemática 3D | GLM |
 | Loader OpenGL | GLAD |
+| Texturas | stb_image |
