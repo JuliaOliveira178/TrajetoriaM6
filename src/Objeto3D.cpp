@@ -1,14 +1,18 @@
-/* Objeto 3D - Atividade Acadêmica Computação Gráfica - Módulo 5
+/* Objeto 3D - Atividade Acadêmica Computação Gráfica - Módulo 6
  * Júlia Oliveira
  * Câmera em primeira pessoa com classe Camera.
  * Inclui: View Matrix (lookAt), Projection Matrix (perspective),
  *         movimento WASD com deltaTime, mouse look (yaw/pitch), zoom com scroll.
+ *         Trajetórias cíclicas por waypoints para cada objeto.
  *
  * Controles:
  *   TAB       - alterna objeto selecionado: 0 -> 1 -> 2 -> 0
  *   R         - modo Girar    -> setas giram o objeto
  *   T         - modo Transladar -> setas transladam o objeto
  *   P         - modo Escalar  -> setas/+/- escalam o objeto (S reservado para WASD)
+ *   C         - adiciona ponto de controle na posição atual do objeto selecionado
+ *   G         - inicia/pausa animação de trajetória do objeto selecionado
+ *   U         - remove todos os pontos de controle do objeto selecionado
  *   1/2/3     - liga/desliga luz principal / preenchimento / fundo
  *   W/A/S/D   - move câmera (frente/esquerda/trás/direita)
  *   Mouse     - orienta câmera (yaw/pitch)
@@ -22,6 +26,9 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using namespace std;
 
@@ -153,6 +160,12 @@ struct Objeto {
     float escala;
     float anguloX, anguloY, anguloZ;
 
+    // Trajetória: lista de pontos de controle e estado de animação
+    vector<glm::vec3> pontosControle;
+    bool animando  = false;
+    int   idxPonto = 0;     // índice do ponto de destino atual
+    float tPonto   = 0.0f;  // parâmetro t em [0,1] entre ponto anterior e atual
+
     Objeto(GLuint v, GLuint tex, int nv, glm::vec3 pos, float s = 0.25f)
         : vao(v), textura(tex), nVertices(nv), posicao(pos), escala(s),
           anguloX(0.0f), anguloY(0.0f), anguloZ(0.0f) {}
@@ -250,6 +263,7 @@ const float PASSO_TRANSLACAO = 0.08f;
 const float PASSO_ESCALA     = 0.04f;
 const float ESCALA_MIN       = 0.04f;
 const float PASSO_ROTACAO    = glm::radians(7.0f);
+const float VELOCIDADE_ANIM  = 0.8f; // unidades de espaço por segundo
 
 float deltaTime = 0.0f;
 float ultimoFrame = 0.0f;
@@ -270,6 +284,9 @@ void atualizarPosicaoLuzes() {
 // ---------------------------------------------------------------------------
 int main()
 {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+#endif
     glfwInit();
 
     GLFWwindow* janela = glfwCreateWindow(LARGURA, ALTURA, "Objeto 3D - Camera FPS", nullptr, nullptr);
@@ -356,12 +373,31 @@ int main()
         string nomeModo = (modoTransformacao == GIRAR)      ? "GIRAR"
                         : (modoTransformacao == TRANSLADAR) ? "TRANSLADAR" : "ESCALAR";
         string estadoLuzes = string(luzes[0].ativa?"1":"_") + (luzes[1].ativa?"2":"_") + (luzes[2].ativa?"3":"_");
+        string animSt = objetos[modoAtivo].animando ? " [ANIMANDO]" : "";
         glfwSetWindowTitle(janela,
             ("Objeto 3D | Julia Oliveira | Camera FPS | [" + nomeObjeto + "] [" + nomeModo + "]"
-             + " | WASD=cam Mouse=olhar Scroll=zoom | [luzes:" + estadoLuzes + "]").c_str());
+             + " | C=ponto G=animar U=limpar | [luzes:" + estadoLuzes + "]" + animSt).c_str());
 
         glClearColor(0.08f, 0.12f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // Atualiza trajetórias: interpolação linear cíclica entre pontos de controle
+        for (auto& obj : objetos) {
+            if (!obj.animando || obj.pontosControle.size() < 2) continue;
+            int n = (int)obj.pontosControle.size();
+            glm::vec3 anterior = obj.pontosControle[(obj.idxPonto - 1 + n) % n];
+            glm::vec3 proximo  = obj.pontosControle[obj.idxPonto];
+            float distSeg  = glm::length(proximo - anterior);
+            float incremento = (distSeg > 0.0001f) ? VELOCIDADE_ANIM * deltaTime / distSeg : 1.0f;
+            obj.tPonto += incremento;
+            if (obj.tPonto >= 1.0f) {
+                obj.tPonto   = 0.0f;
+                obj.posicao  = proximo;
+                obj.idxPonto = (obj.idxPonto + 1) % n;
+            } else {
+                obj.posicao = glm::mix(anterior, proximo, obj.tPonto);
+            }
+        }
 
         // Atualiza view e projection a cada frame (FOV pode mudar com scroll)
         glm::mat4 view     = camara->getMatrizView();
@@ -429,6 +465,44 @@ void key_callback(GLFWwindow* janela, int tecla, int scancode, int acao, int mod
         if (tecla == GLFW_KEY_1) luzes[0].ativa = !luzes[0].ativa;
         if (tecla == GLFW_KEY_2) luzes[1].ativa = !luzes[1].ativa;
         if (tecla == GLFW_KEY_3) luzes[2].ativa = !luzes[2].ativa;
+
+        // C: registra a posição atual do objeto como novo ponto de controle
+        if (tecla == GLFW_KEY_C) {
+            Objeto& obj = objetos[modoAtivo];
+            obj.pontosControle.push_back(obj.posicao);
+            cout << "Ponto de controle adicionado: ("
+                 << obj.posicao.x << ", "
+                 << obj.posicao.y << ", "
+                 << obj.posicao.z << ") — total: "
+                 << obj.pontosControle.size() << endl;
+        }
+
+        // G: inicia ou pausa a animação do objeto selecionado
+        if (tecla == GLFW_KEY_G) {
+            Objeto& obj = objetos[modoAtivo];
+            if (obj.pontosControle.size() < 2) {
+                cout << "Adicione ao menos 2 pontos de controle antes de animar (tecla C)." << endl;
+            } else {
+                obj.animando = !obj.animando;
+                if (obj.animando) {
+                    obj.idxPonto = 1;
+                    obj.tPonto   = 0.0f;
+                    cout << "Animação iniciada (" << obj.pontosControle.size() << " pontos)." << endl;
+                } else {
+                    cout << "Animação pausada." << endl;
+                }
+            }
+        }
+
+        // U: remove todos os pontos de controle e interrompe a animação
+        if (tecla == GLFW_KEY_U) {
+            Objeto& obj = objetos[modoAtivo];
+            obj.pontosControle.clear();
+            obj.animando  = false;
+            obj.idxPonto  = 0;
+            obj.tPonto    = 0.0f;
+            cout << "Pontos de controle removidos." << endl;
+        }
     }
 
     if (acao == GLFW_PRESS || acao == GLFW_REPEAT)
