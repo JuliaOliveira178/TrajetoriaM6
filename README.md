@@ -1,9 +1,9 @@
-# M5 — Câmera em Primeira Pessoa
+# M6 — Trajetórias Cíclicas
 **Júlia Oliveira | Computação Gráfica**
 
 ---
 
-Cena interativa com três objetos 3D texturizados, iluminação Phong com técnica de 3 luzes pontuais e câmera em primeira pessoa controlada por teclado e mouse.
+Cena interativa com três objetos 3D texturizados, iluminação Phong com técnica de 3 luzes pontuais, câmera em primeira pessoa e trajetórias cíclicas por pontos de controle.
 
 ---
 
@@ -15,22 +15,18 @@ Requisitos: **CMake 3.10+** e compilador **C++17** (MSVC recomendado).
 cd build
 cmake ..
 cmake --build . --config Debug
+cp -r ..\assets .\Debug\assets
 cd Debug
 .\Objeto3D.exe
 ```
 
 > GLFW, GLM e stb_image são obtidos automaticamente pelo CMake na primeira compilação.
 
-> **Textura desatualizada?** Copie manualmente para a pasta do executável:
-> ```powershell
-> cp ..\assets\texture.png assets\texture.png
-> ```
-
 ---
 
 ## Como usar
 
-O título da janela mostra o objeto selecionado, o modo ativo e o estado das luzes.
+O título da janela mostra o objeto selecionado, o modo ativo, o estado das luzes e se a animação está em curso.
 
 ### Câmera
 | Tecla / Input | Ação |
@@ -55,6 +51,15 @@ O título da janela mostra o objeto selecionado, o modo ativo e o estado das luz
 
 No modo **Girar**, as teclas `X` `Y` `Z` rotacionam no eixo correspondente.  
 No modo **Escalar**, `+` e `-` também funcionam.
+
+### Trajetórias
+| Tecla | Ação |
+|---|---|
+| `C` | Adiciona ponto de controle na posição atual do objeto selecionado |
+| `G` | Inicia / pausa animação (requer ao menos 2 pontos) |
+| `U` | Remove todos os pontos de controle do objeto selecionado |
+
+**Como usar:** entre no modo Transladar (`T`), mova o objeto com as setas para a posição desejada e pressione `C`. Repita para cada ponto. Pressione `G` para iniciar a animação cíclica.
 
 ### Luzes
 | Tecla | Ação |
