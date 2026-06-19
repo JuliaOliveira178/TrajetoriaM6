@@ -159,15 +159,17 @@ struct Objeto {
     glm::vec3 posicao;
     float escala;
     float anguloX, anguloY, anguloZ;
+    Material material;
 
     // Trajetória: lista de pontos de controle e estado de animação
     vector<glm::vec3> pontosControle;
-    bool animando  = false;
-    int   idxPonto = 0;     // índice do ponto de destino atual
-    float tPonto   = 0.0f;  // parâmetro t em [0,1] entre ponto anterior e atual
+    bool animando   = false;
+    int   idxPonto  = 0;
+    float tPonto    = 0.0f;
+    float tGlobal   = 0.0f;  // t global para Bézier cíclica
 
-    Objeto(GLuint v, GLuint tex, int nv, glm::vec3 pos, float s = 0.25f)
-        : vao(v), textura(tex), nVertices(nv), posicao(pos), escala(s),
+    Objeto(GLuint v, GLuint tex, int nv, glm::vec3 pos, float s, Material m)
+        : vao(v), textura(tex), nVertices(nv), posicao(pos), escala(s), material(m),
           anguloX(0.0f), anguloY(0.0f), anguloZ(0.0f) {}
 };
 
@@ -271,6 +273,28 @@ float ultimoFrame = 0.0f;
 template<typename Fn>
 void aplicarAoSelecionado(Fn fn) { fn(objetos[modoAtivo]); }
 
+// Avalia uma curva de Bézier cúbica pelo algoritmo de De Casteljau
+glm::vec3 bezierCubico(glm::vec3 p0, glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, float t) {
+    glm::vec3 q0 = glm::mix(p0, p1, t);
+    glm::vec3 q1 = glm::mix(p1, p2, t);
+    glm::vec3 q2 = glm::mix(p2, p3, t);
+    glm::vec3 r0 = glm::mix(q0, q1, t);
+    glm::vec3 r1 = glm::mix(q1, q2, t);
+    return glm::mix(r0, r1, t);
+}
+
+// Avalia posição na trajetória Bézier cíclica dado tGlobal em [0, n)
+glm::vec3 avaliarTrajetoria(const vector<glm::vec3>& pts, float tGlobal) {
+    int n   = (int)pts.size();
+    int seg = (int)tGlobal % n;
+    float t = tGlobal - (int)tGlobal;
+    glm::vec3 p0 = pts[ seg        % n];
+    glm::vec3 p1 = pts[(seg + 1)   % n];
+    glm::vec3 p2 = pts[(seg + 2)   % n];
+    glm::vec3 p3 = pts[(seg + 3)   % n];
+    return bezierCubico(p0, p1, p2, p3, t);
+}
+
 void atualizarPosicaoLuzes() {
     float e = objetos[0].escala;
     glm::vec3 p = objetos[0].posicao;
@@ -334,27 +358,50 @@ int main()
 
     glEnable(GL_DEPTH_TEST);
 
-    // Lê MTL e carrega textura uma única vez — compartilhados pelos 3 objetos
-    Material mat = lerMTL("assets/Suzanne.mtl");
-    GLuint idTextura = carregarTextura(mat.arquivoTextura.empty() ? "" : "assets/" + mat.arquivoTextura);
+    // Carrega cena a partir do arquivo de configuração (assets/cena.txt)
+    // O carregarOBJ da Julia usa VAO compartilhado — carrega uma vez e reutiliza
+    {
+        // Carrega geometria e material base uma vez
+        Material matBase = lerMTL("assets/Suzanne.mtl");
+        GLuint idTexBase = carregarTextura(matBase.arquivoTextura.empty() ? "" : "assets/" + matBase.arquivoTextura);
+        int nv; GLuint vaoBase = carregarOBJ("assets/modelo.obj", nv);
 
-    glUniform3fv(locKa, 1, glm::value_ptr(mat.ka));
-    glUniform3fv(locKd, 1, glm::value_ptr(mat.kd));
-    glUniform3fv(locKs, 1, glm::value_ptr(mat.ks));
-    glUniform1f(locNs, mat.ns);
+        ifstream cenaFile("assets/cena.txt");
+        if (!cenaFile.is_open())
+            cerr << "cena.txt não encontrado em assets/ — usando cena padrão." << endl;
+        string linha;
+        while (getline(cenaFile, linha)) {
+            if (linha.empty() || linha[0] == '#') continue;
+            istringstream ss(linha); string token; ss >> token;
+            if (token == "obj") {
+                string caminhoObj; float x, y, z, s;
+                ss >> caminhoObj >> x >> y >> z >> s;
+                // Carrega OBJ próprio se diferente do base, senão compartilha VAO
+                int nv2; GLuint vao2, tex2; Material mat2;
+                if (caminhoObj == "assets/modelo.obj") {
+                    vao2 = vaoBase; nv2 = nv; tex2 = idTexBase; mat2 = matBase;
+                } else {
+                    string mtlPath = caminhoObj.substr(0, caminhoObj.rfind('.')) + ".mtl";
+                    mat2 = lerMTL(mtlPath);
+                    tex2 = carregarTextura(mat2.arquivoTextura.empty() ? "" : "assets/" + mat2.arquivoTextura);
+                    vao2 = carregarOBJ(caminhoObj, nv2);
+                }
+                if (vao2 != (GLuint)-1)
+                    objetos.push_back(Objeto(vao2, tex2, nv2, glm::vec3(x, y, z), s, mat2));
+            }
+        }
 
-    // Carrega geometria — VAO compartilhado entre as 3 instâncias
-    int nv;
-    GLuint vaoCompartilhado = carregarOBJ("assets/modelo.obj", nv);
-    if (vaoCompartilhado == (GLuint)-1) {
-        cerr << "Falha ao carregar modelo OBJ." << endl;
-        glfwTerminate();
-        return -1;
+        // Fallback se cena.txt não carregou nada
+        if (objetos.empty()) {
+            if (vaoBase == (GLuint)-1) {
+                cerr << "Falha ao carregar modelo OBJ." << endl;
+                glfwTerminate(); return -1;
+            }
+            objetos.push_back(Objeto(vaoBase, idTexBase, nv, glm::vec3(-0.45f, -0.3f, 0.0f), 0.2f, matBase));
+            objetos.push_back(Objeto(vaoBase, idTexBase, nv, glm::vec3( 0.45f, -0.3f, 0.0f), 0.2f, matBase));
+            objetos.push_back(Objeto(vaoBase, idTexBase, nv, glm::vec3( 0.00f,  0.5f, 0.0f), 0.2f, matBase));
+        }
     }
-
-    objetos.push_back(Objeto(vaoCompartilhado, idTextura, nv, glm::vec3(-0.45f, -0.3f, 0.0f), 0.2f));
-    objetos.push_back(Objeto(vaoCompartilhado, idTextura, nv, glm::vec3( 0.45f, -0.3f, 0.0f), 0.2f));
-    objetos.push_back(Objeto(vaoCompartilhado, idTextura, nv, glm::vec3( 0.00f,  0.5f, 0.0f), 0.2f));
 
     luzes[0].cor = glm::vec3(1.0f, 1.0f, 0.95f); luzes[0].intensidade = 1.0f;
     luzes[1].cor = glm::vec3(0.8f, 0.9f, 1.0f);  luzes[1].intensidade = 0.5f;
@@ -381,21 +428,27 @@ int main()
         glClearColor(0.08f, 0.12f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // Atualiza trajetórias: interpolação linear cíclica entre pontos de controle
+        // Atualiza trajetórias: Bézier cíclica (≥4 pontos) ou linear (2-3 pontos)
         for (auto& obj : objetos) {
             if (!obj.animando || obj.pontosControle.size() < 2) continue;
             int n = (int)obj.pontosControle.size();
-            glm::vec3 anterior = obj.pontosControle[(obj.idxPonto - 1 + n) % n];
-            glm::vec3 proximo  = obj.pontosControle[obj.idxPonto];
-            float distSeg  = glm::length(proximo - anterior);
-            float incremento = (distSeg > 0.0001f) ? VELOCIDADE_ANIM * deltaTime / distSeg : 1.0f;
-            obj.tPonto += incremento;
-            if (obj.tPonto >= 1.0f) {
-                obj.tPonto   = 0.0f;
-                obj.posicao  = proximo;
-                obj.idxPonto = (obj.idxPonto + 1) % n;
+            if (n >= 4) {
+                obj.tGlobal += VELOCIDADE_ANIM * deltaTime;
+                if (obj.tGlobal >= (float)n) obj.tGlobal -= (float)n;
+                obj.posicao = avaliarTrajetoria(obj.pontosControle, obj.tGlobal);
             } else {
-                obj.posicao = glm::mix(anterior, proximo, obj.tPonto);
+                glm::vec3 anterior = obj.pontosControle[(obj.idxPonto - 1 + n) % n];
+                glm::vec3 proximo  = obj.pontosControle[obj.idxPonto];
+                float distSeg    = glm::length(proximo - anterior);
+                float incremento = (distSeg > 0.0001f) ? VELOCIDADE_ANIM * deltaTime / distSeg : 1.0f;
+                obj.tPonto += incremento;
+                if (obj.tPonto >= 1.0f) {
+                    obj.tPonto   = 0.0f;
+                    obj.posicao  = proximo;
+                    obj.idxPonto = (obj.idxPonto + 1) % n;
+                } else {
+                    obj.posicao = glm::mix(anterior, proximo, obj.tPonto);
+                }
             }
         }
 
@@ -415,10 +468,16 @@ int main()
         }
 
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, idTextura);
 
         for (int i = 0; i < (int)objetos.size(); i++)
         {
+            // Passa material e textura específicos de cada objeto
+            glUniform3fv(locKa, 1, glm::value_ptr(objetos[i].material.ka));
+            glUniform3fv(locKd, 1, glm::value_ptr(objetos[i].material.kd));
+            glUniform3fv(locKs, 1, glm::value_ptr(objetos[i].material.ks));
+            glUniform1f (locNs,    objetos[i].material.ns);
+            glBindTexture(GL_TEXTURE_2D, objetos[i].textura);
+
             glm::mat4 matriz = glm::mat4(1.0f);
             matriz = glm::translate(matriz, objetos[i].posicao);
             matriz = glm::rotate(matriz, objetos[i].anguloX, glm::vec3(1.0f, 0.0f, 0.0f));
@@ -487,6 +546,7 @@ void key_callback(GLFWwindow* janela, int tecla, int scancode, int acao, int mod
                 if (obj.animando) {
                     obj.idxPonto = 1;
                     obj.tPonto   = 0.0f;
+                    obj.tGlobal  = 0.0f;
                     cout << "Animação iniciada (" << obj.pontosControle.size() << " pontos)." << endl;
                 } else {
                     cout << "Animação pausada." << endl;
@@ -501,6 +561,7 @@ void key_callback(GLFWwindow* janela, int tecla, int scancode, int acao, int mod
             obj.animando  = false;
             obj.idxPonto  = 0;
             obj.tPonto    = 0.0f;
+            obj.tGlobal   = 0.0f;
             cout << "Pontos de controle removidos." << endl;
         }
     }

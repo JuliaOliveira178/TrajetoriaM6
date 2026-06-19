@@ -1,17 +1,19 @@
-# M6 — Trajetórias Cíclicas
+# M6 — Trajetórias com Curvas de Bézier
 **Júlia Oliveira | Computação Gráfica**
 
 ---
 
-Cena interativa com três objetos 3D texturizados, iluminação Phong com técnica de 3 luzes pontuais, câmera em primeira pessoa e trajetórias cíclicas por pontos de controle.
+Visualizador 3D interativo com três objetos texturizados, iluminação Phong com técnica de 3 luzes pontuais, câmera em primeira pessoa e trajetórias cíclicas por curvas de Bézier cúbicas (algoritmo De Casteljau).
 
 ---
 
-## Compilação
+## Setup — Compilação e execução
 
-Requisitos: **CMake 3.10+** e compilador **C++17** (MSVC recomendado).
+Requisitos: **CMake 3.10+**, compilador **C++17** (MSVC recomendado), **Git**.
 
 ```powershell
+# Na pasta raiz do projeto (Cubo3D/)
+mkdir build
 cd build
 cmake ..
 cmake --build . --config Debug
@@ -21,6 +23,12 @@ cd Debug
 ```
 
 > GLFW, GLM e stb_image são obtidos automaticamente pelo CMake na primeira compilação.
+
+A cena é configurada pelo arquivo `assets/cena.txt`:
+```
+# formato: obj <arquivo_obj> <x> <y> <z> <escala>
+obj assets/modelo.obj -0.45 -0.3 0.0 0.2
+```
 
 ---
 
@@ -41,43 +49,49 @@ O título da janela mostra o objeto selecionado, o modo ativo, o estado das luze
 - `T` — modo Transladar
 - `P` — modo Escalar (`S` reservado para câmera)
 
-**Ações com as setas (conforme o modo ativo)**
-
 | Modo | `←` `→` | `↑` `↓` |
 |------|---------|---------|
 | Girar | Eixo Y | Eixo X |
 | Transladar | Eixo X | Eixo Y |
 | Escalar | — | Aumentar / Diminuir |
 
-No modo **Girar**, as teclas `X` `Y` `Z` rotacionam no eixo correspondente.  
+No modo **Girar**, `X` `Y` `Z` rotacionam no eixo correspondente.  
 No modo **Escalar**, `+` e `-` também funcionam.
 
-### Trajetórias
+### Trajetórias (Bézier cúbica)
 | Tecla | Ação |
 |---|---|
 | `C` | Adiciona ponto de controle na posição atual do objeto selecionado |
-| `G` | Inicia / pausa animação (requer ao menos 2 pontos) |
+| `G` | Inicia / pausa animação (mínimo 2 pontos; ≥4 usa Bézier cúbica) |
 | `U` | Remove todos os pontos de controle do objeto selecionado |
 
-**Como usar:** entre no modo Transladar (`T`), mova o objeto com as setas para a posição desejada e pressione `C`. Repita para cada ponto. Pressione `G` para iniciar a animação cíclica.
+**Como usar:** modo `T` → mova com setas → `C` (repita para cada ponto) → `G` para animar.
 
 ### Luzes
 | Tecla | Ação |
 |---|---|
-| `1` | Liga/desliga luz principal (key) |
-| `2` | Liga/desliga luz de preenchimento (fill) |
-| `3` | Liga/desliga luz de fundo (back) |
+| `1` | Liga/desliga luz principal (key light) |
+| `2` | Liga/desliga luz de preenchimento (fill light) |
+| `3` | Liga/desliga luz de fundo (back light) |
 
 `ESC` fecha a aplicação.
 
 ---
 
-## Stack
+## Assets
 
-| | |
+| Asset | Procedência |
 |---|---|
-| Renderização | OpenGL 4.5 / GLSL 450 |
-| Janela e input | GLFW 3.4 |
-| Matemática 3D | GLM |
-| Loader OpenGL | GLAD |
-| Texturas | stb_image |
+| `modelo.obj` | [Repositório de exemplos da disciplina](https://github.com/fellowsheep/FCG2025-1) |
+| `texture.png` | [Poly Haven](https://polyhaven.com/textures) — licença CC0 |
+
+---
+
+## Referências
+
+- **OpenGL:** [learnopengl.com](https://learnopengl.com) — iluminação Phong, mapeamento de textura, câmera FPS
+- **GLFW:** [glfw.org/docs](https://www.glfw.org/docs/latest/)
+- **GLM:** [glm.g-truc.net](https://glm.g-truc.net/)
+- **stb_image:** [github.com/nothings/stb](https://github.com/nothings/stb)
+- **Curvas de Bézier (De Casteljau):** slides da disciplina — Módulo 6, Rossana B. Queiroz
+- **Formato OBJ/MTL:** [paulbourke.net/dataformats/obj](http://paulbourke.net/dataformats/obj/)
