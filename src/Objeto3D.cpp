@@ -283,15 +283,29 @@ glm::vec3 bezierCubico(glm::vec3 p0, glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, f
     return glm::mix(r0, r1, t);
 }
 
-// Avalia posição na trajetória Bézier cíclica dado tGlobal em [0, n)
+// Avalia posição na trajetória Bézier cíclica dado tGlobal em [0, n).
+// Cada segmento vai de pts[i] até pts[i+1] — o objeto passa por cada waypoint.
+// As tangentes são calculadas automaticamente a partir dos vizinhos (Catmull-Rom),
+// garantindo continuidade suave entre segmentos sem exigir tangentes manuais.
 glm::vec3 avaliarTrajetoria(const vector<glm::vec3>& pts, float tGlobal) {
     int n   = (int)pts.size();
-    int seg = (int)tGlobal % n;
+    int i   = (int)tGlobal % n;
     float t = tGlobal - (int)tGlobal;
-    glm::vec3 p0 = pts[ seg        % n];
-    glm::vec3 p1 = pts[(seg + 1)   % n];
-    glm::vec3 p2 = pts[(seg + 2)   % n];
-    glm::vec3 p3 = pts[(seg + 3)   % n];
+
+    // Pontos de início e fim do segmento atual
+    glm::vec3 p0 = pts[i % n];
+    glm::vec3 p3 = pts[(i + 1) % n];
+
+    // Tangente em p0: direção entre o ponto anterior e o próximo (Catmull-Rom)
+    glm::vec3 tang0 = (pts[(i + 1) % n] - pts[(i - 1 + n) % n]) * 0.5f;
+    // Tangente em p3: direção entre p0 e o ponto depois de p3
+    glm::vec3 tang1 = (pts[(i + 2) % n] - pts[i % n]) * 0.5f;
+
+    // Converte as tangentes de Hermite para pontos de controle de Bézier
+    // p1 e p2 são os handles que determinam a forma da curva no segmento
+    glm::vec3 p1 = p0 + tang0 / 3.0f;
+    glm::vec3 p2 = p3 - tang1 / 3.0f;
+
     return bezierCubico(p0, p1, p2, p3, t);
 }
 
@@ -433,7 +447,13 @@ int main()
             if (!obj.animando || obj.pontosControle.size() < 2) continue;
             int n = (int)obj.pontosControle.size();
             if (n >= 4) {
-                obj.tGlobal += VELOCIDADE_ANIM * deltaTime;
+                // Normaliza velocidade pelo comprimento do segmento atual
+                int i = (int)obj.tGlobal % n;
+                glm::vec3 segInicio = obj.pontosControle[i % n];
+                glm::vec3 segFim    = obj.pontosControle[(i + 1) % n];
+                float segLen = glm::length(segFim - segInicio);
+                float incremento = (segLen > 0.0001f) ? VELOCIDADE_ANIM * deltaTime / segLen : VELOCIDADE_ANIM * deltaTime;
+                obj.tGlobal += incremento;
                 if (obj.tGlobal >= (float)n) obj.tGlobal -= (float)n;
                 obj.posicao = avaliarTrajetoria(obj.pontosControle, obj.tGlobal);
             } else {
